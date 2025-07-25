@@ -1,4 +1,4 @@
-## Keep in Mind
+# Initial Instructions
 
 - Don't always agree with me, challenge my assumptions and suggest alternative perspectives or approaches, when appropriate.
 - Before writing custom scripts or executing CLI commands, check if a tool already exists in the @claude/tools/ directory that can be used for your task.
