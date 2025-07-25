@@ -1,6 +1,6 @@
 # Claude Code Windows Installer
 
-A one-click installer for [Claude Code](https://claude.ai/code) on Windows systems. This installer automatically handles all dependencies and provides a seamless installation experience for Windows users.
+A one-click installer for [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) on Windows systems. This installer automatically handles all dependencies and provides a seamless installation experience for Windows users.
 
 ## What It Does
 
@@ -22,7 +22,7 @@ After installation, you can right-click any folder and select "Open with Claude 
 Open **Command Prompt** or **PowerShell** as Administrator and run:
 
 ```cmd
-curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/START%20HERE%20-%20Install%20Claude%20Code.bat" -o install.bat && install.bat
+curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat
 ```
 
 This single command will:
@@ -40,7 +40,7 @@ git clone https://github.com/nitromike502/claude-code-windows-installer.git
 cd claude-code-windows-installer
 ```
 
-Then double-click `START HERE - Install Claude Code.bat` or run it from command line.
+Then double-click `install.bat` or run it from command line.
 
 **Smart Detection**: The installer automatically detects if you're running from a cloned repo and uses local files instead of downloading them.
 
@@ -49,7 +49,7 @@ Then double-click `START HERE - Install Claude Code.bat` or run it from command 
 **For those who prefer downloading manually:**
 1. Download the repository as ZIP from GitHub
 2. Extract the files to your Windows machine
-3. Double-click `START HERE - Install Claude Code.bat`
+3. Double-click `install.bat`
 4. Click "Yes" when prompted for admin privileges
 5. Answer the interactive prompts for your preferences
 6. Wait for installation to complete
@@ -88,7 +88,7 @@ The installer uses interactive prompts instead of command-line flags, making it 
 ### Installation Flow
 ```batch
 # Run the installer
-"START HERE - Install Claude Code.bat"
+"install.bat"
 ```
 
 The installer will prompt you for decisions:
@@ -199,7 +199,7 @@ To update versions, simply edit the JSON file - no code changes required.
 
 ```
 claude-code-windows-installer/
-├── START HERE - Install Claude Code.bat  # Main launcher
+├── install.bat                          # Main launcher
 ├── src/
 │   ├── installer.ps1                        # PowerShell installer script
 │   └── config.json                          # Configuration file
