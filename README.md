@@ -17,21 +17,47 @@ After installation, you can right-click any folder and select "Open with Claude 
 
 ## Quick Install
 
-**Automated Installation:**
-1. Download the installer files to your Windows machine
-2. Double-click `START HERE - Install Claude Code.bat`
-3. Click "Yes" when prompted for admin privileges
-4. Answer the interactive prompts for your preferences
-5. Wait for installation to complete
+### 🚀 One-Command Installation (Fastest)
 
-**Manual Installation (recommended for review):**
-1. Download the installer files
-2. Review the PowerShell script at `src/installer.ps1`
-3. Run the installer: `START HERE - Install Claude Code.bat`
+Open **Command Prompt** or **PowerShell** as Administrator and run:
+
+```cmd
+curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/START%20HERE%20-%20Install%20Claude%20Code.bat" -o install.bat && install.bat
+```
+
+This single command will:
+- Download the installer automatically
+- Fetch all required files from the repository  
+- Run the complete installation process
+- Clean up temporary files when done
+
+### 📂 Clone Repository Method (For Development/Review)
+
+If you want to review the code or contribute:
+
+```cmd
+git clone https://github.com/nitromike502/claude-code-windows-installer.git
+cd claude-code-windows-installer
+```
+
+Then double-click `START HERE - Install Claude Code.bat` or run it from command line.
+
+**Smart Detection**: The installer automatically detects if you're running from a cloned repo and uses local files instead of downloading them.
+
+### 📁 Manual Download Method
+
+**For those who prefer downloading manually:**
+1. Download the repository as ZIP from GitHub
+2. Extract the files to your Windows machine
+3. Double-click `START HERE - Install Claude Code.bat`
+4. Click "Yes" when prompted for admin privileges
+5. Answer the interactive prompts for your preferences
+6. Wait for installation to complete
 
 ## Features
 
-- ✅ **One-click installation** - Simply double-click the batch file to start
+- ✅ **Single-command installation** - One curl command downloads and runs everything
+- ✅ **Smart local detection** - Automatically uses local files if repository is cloned
 - ✅ **Automatic dependency management** - Installs Git and Node.js if missing
 - ✅ **Smart version detection** - Uses nvm-windows for better Node.js version management
 - ✅ **Architecture aware** - Automatically detects 32-bit vs 64-bit Windows
