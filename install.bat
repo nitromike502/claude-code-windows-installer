@@ -15,6 +15,9 @@ set "DEBUG_MODE=false"
 if /i "%1"=="-debug" set "DEBUG_MODE=true"
 if /i "%1"=="--debug" set "DEBUG_MODE=true"
 
+:: Set GitHub repository base URL globally
+set "REPO_BASE=https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main"
+
 echo ========================================
 echo      Claude Code Installer            
 echo ========================================
@@ -59,17 +62,29 @@ if "%LOCAL_MODE%"=="false" (
         )
     )
     
-    :: Create temporary directory
+    :: Create temporary directory with subdirectories
     set "TEMP_DIR=%TEMP%\ClaudeCodeInstaller_%RANDOM%"
-    if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
-    if not exist "%TEMP_DIR%\src" mkdir "%TEMP_DIR%\src"
-    if not exist "%TEMP_DIR%\assets" mkdir "%TEMP_DIR%\assets"
+    if "%DEBUG_MODE%"=="true" echo [DEBUG] Creating temp directory: !TEMP_DIR!
     
-    :: GitHub repository base URL
-    set "REPO_BASE=https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main"
+    mkdir "!TEMP_DIR!" 2>nul
+    mkdir "!TEMP_DIR!\src" 2>nul
+    mkdir "!TEMP_DIR!\assets" 2>nul
+    
+    if "%DEBUG_MODE%"=="true" (
+        echo [DEBUG] Directory creation results:
+        if exist "!TEMP_DIR!" (echo [DEBUG] - !TEMP_DIR! [OK]) else (echo [DEBUG] - !TEMP_DIR! [FAILED])
+        if exist "!TEMP_DIR!\src" (echo [DEBUG] - !TEMP_DIR!\src [OK]) else (echo [DEBUG] - !TEMP_DIR!\src [FAILED])
+        if exist "!TEMP_DIR!\assets" (echo [DEBUG] - !TEMP_DIR!\assets [OK]) else (echo [DEBUG] - !TEMP_DIR!\assets [FAILED])
+    )
+    
+    if "%DEBUG_MODE%"=="true" (
+        echo [DEBUG] REPO_BASE set to: !REPO_BASE!
+        echo [DEBUG] Full URL will be: !REPO_BASE!/src/config.json
+        echo [DEBUG] TEMP_DIR set to: !TEMP_DIR!
+    )
     
     echo Downloading configuration files...
-    call :DownloadFile "%REPO_BASE%/src/config.json" "%TEMP_DIR%\src\config.json"
+    call :DownloadFile "!REPO_BASE!/src/config.json" "!TEMP_DIR!\src\config.json"
     if !errorlevel! neq 0 (
         echo ERROR: Failed to download config.json from GitHub
         echo.
@@ -87,21 +102,21 @@ if "%LOCAL_MODE%"=="false" (
     )
     
     echo Downloading installer script...
-    call :DownloadFile "%REPO_BASE%/src/installer.ps1" "%TEMP_DIR%\src\installer.ps1"
+    call :DownloadFile "!REPO_BASE!/src/installer.ps1" "!TEMP_DIR!\src\installer.ps1"
     if !errorlevel! neq 0 (
         echo ERROR: Failed to download installer.ps1
         goto :cleanup
     )
     
     echo Downloading icon file...
-    call :DownloadFile "%REPO_BASE%/assets/claude-color.ico" "%TEMP_DIR%\assets\claude-color.ico"
+    call :DownloadFile "!REPO_BASE!/assets/claude-color.ico" "!TEMP_DIR!\assets\claude-color.ico"
     if !errorlevel! neq 0 (
         echo WARNING: Failed to download icon file, installer will use default icon
     )
     
     echo.
     echo Files downloaded successfully!
-    set "INSTALL_DIR=%TEMP_DIR%"
+    set "INSTALL_DIR=!TEMP_DIR!"
 ) else (
     echo Using local repository files
 )
@@ -111,12 +126,26 @@ echo Starting installation...
 echo.
 
 :: Change to installation directory and run installer
-cd /d "%INSTALL_DIR%"
 if "%DEBUG_MODE%"=="true" (
-    echo [DEBUG] Running PowerShell installer with debug mode...
-    PowerShell -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_DIR%\src\installer.ps1" -Debug
+    echo [DEBUG] INSTALL_DIR is: !INSTALL_DIR!
+    echo [DEBUG] PowerShell script path: !INSTALL_DIR!\src\installer.ps1
+    if exist "!INSTALL_DIR!\src\installer.ps1" (
+        echo [DEBUG] PowerShell script file exists
+    ) else (
+        echo [DEBUG] PowerShell script file NOT FOUND
+    )
+)
+
+cd /d "!INSTALL_DIR!"
+if "%DEBUG_MODE%"=="true" (
+    echo [DEBUG] Changed to directory: !CD!
+    echo [DEBUG] About to run PowerShell installer with debug mode...
+    echo [DEBUG] Full command: PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" -Debug
+    echo [DEBUG] Press any key to continue...
+    pause > nul
+    PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" -Debug
 ) else (
-    PowerShell -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_DIR%\src\installer.ps1"
+    PowerShell -NoProfile -ExecutionPolicy Bypass -File "!INSTALL_DIR!\src\installer.ps1"
 )
 
 :cleanup
@@ -139,9 +168,9 @@ set "url=%~1"
 set "dest=%~2"
 
 if "%DEBUG_MODE%"=="true" (
-    echo [DEBUG] Downloading: %url%
-    echo [DEBUG] Destination: %dest%
-    echo [DEBUG] Method: %USE_POWERSHELL%
+    echo [DEBUG] Downloading: !url!
+    echo [DEBUG] Destination: !dest!
+    echo [DEBUG] Method: !USE_POWERSHELL!
 )
 
 if "%USE_POWERSHELL%"=="true" (
@@ -155,17 +184,17 @@ if "%USE_POWERSHELL%"=="true" (
     :: Use curl
     if "%DEBUG_MODE%"=="true" echo [DEBUG] Using curl...
     if "%DEBUG_MODE%"=="true" (
-        curl -L -v -o "%dest%" "%url%" 2>&1
+        curl -L -v -o "!dest!" "!url!" 2>&1
         set "download_result=!errorlevel!"
         echo [DEBUG] curl exit code: !download_result!
-        if exist "%dest%" (
+        if exist "!dest!" (
             echo [DEBUG] File created successfully, size:
-            for %%F in ("%dest%") do echo [DEBUG] %%~zF bytes
+            for %%F in ("!dest!") do echo [DEBUG] %%~zF bytes
         ) else (
             echo [DEBUG] File was not created
         )
     ) else (
-        curl -L -s -o "%dest%" "%url%"
+        curl -L -s -o "!dest!" "!url!"
         set "download_result=!errorlevel!"
     )
     exit /b !download_result!

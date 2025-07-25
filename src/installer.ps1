@@ -46,16 +46,34 @@ function Request-AdminPrivileges {
     param([string]$ScriptPath)
 
     Write-Host "Admin permissions are needed to install system tools. Please click 'Yes' on the prompt." -ForegroundColor Yellow
+    Write-DebugOutput "Current script path: $ScriptPath"
+    Write-DebugOutput "Current working directory: $(Get-Location)"
+    Write-DebugOutput "Debug mode enabled: $Debug"
     Start-Sleep -Seconds 2
 
     try {
+        # Build arguments including debug parameter if enabled
         $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"")
-        Start-Process powershell -Verb RunAs -ArgumentList $arguments
+        if ($Debug) {
+            $arguments += "-Debug"
+            Write-DebugOutput "Adding -Debug parameter to elevated process"
+        }
+        
+        Write-DebugOutput "Starting elevated process with arguments: $($arguments -join ' ')"
+        
+        # Add -NoExit temporarily to keep window open for debugging
+        if ($Debug) {
+            $arguments = @("-NoExit") + $arguments
+            Write-DebugOutput "Adding -NoExit to keep elevated window open for debugging"
+        }
+        
+        Start-Process powershell -Verb RunAs -ArgumentList $arguments -WorkingDirectory (Get-Location)
     }
     catch {
         Write-Host "Failed to elevate privileges: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "Please run PowerShell as Administrator manually and execute the script." -ForegroundColor Yellow
-        pause
+        Write-Host "Press any key to exit..." -ForegroundColor Gray
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     }
     exit
 }
@@ -479,11 +497,20 @@ function Add-ContextMenu {
 
 # Main installation logic
 try {
+    Write-DebugOutput "=== Claude Code Installer Started ==="
+    Write-DebugOutput "Script path: $($MyInvocation.MyCommand.Path)"
+    Write-DebugOutput "Working directory: $(Get-Location)"
+    Write-DebugOutput "Debug mode: $Debug"
+    Write-DebugOutput "Running as admin: $(Test-Administrator)"
+    
     # Check if running as administrator
     if (-not (Test-Administrator)) {
+        Write-DebugOutput "Admin privileges required, requesting elevation..."
         Request-AdminPrivileges -ScriptPath $MyInvocation.MyCommand.Path
         return
     }
+    
+    Write-DebugOutput "Admin privileges confirmed, continuing with installation..."
 
     # Load configuration after admin check
     try {
@@ -711,12 +738,23 @@ try {
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 catch {
+    Write-DebugOutput "Installation failed with error: $($_.Exception.Message)"
+    Write-DebugOutput "Stack trace: $($_.ScriptStackTrace)"
+    
     Write-ColoredOutput ""
     Write-ColoredOutput "========================================" "Red"
     Write-ColoredOutput "    Installation Failed                " "Red"
     Write-ColoredOutput "========================================" "Red"
     Write-ColoredOutput ""
     Write-ColoredOutput "Error: $($_.Exception.Message)" "Red"
+    
+    if ($Debug) {
+        Write-ColoredOutput ""
+        Write-ColoredOutput "Debug Information:" "Yellow"
+        Write-ColoredOutput "Stack trace: $($_.ScriptStackTrace)" "Gray"
+        Write-ColoredOutput "Error details: $($_.Exception | Format-List * | Out-String)" "Gray"
+    }
+    
     Write-ColoredOutput ""
     Write-ColoredOutput "Please check your internet connection and try again." "Yellow"
     Write-ColoredOutput "If the problem persists, please visit:" "Yellow"
