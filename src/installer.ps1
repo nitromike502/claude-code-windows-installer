@@ -61,11 +61,7 @@ function Request-AdminPrivileges {
         
         Write-DebugOutput "Starting elevated process with arguments: $($arguments -join ' ')"
         
-        # Add -NoExit temporarily to keep window open for debugging
-        if ($Debug) {
-            $arguments = @("-NoExit") + $arguments
-            Write-DebugOutput "Adding -NoExit to keep elevated window open for debugging"
-        }
+        # Note: -NoExit removed because batch file handles window pause at end
         
         Start-Process powershell -Verb RunAs -ArgumentList $arguments -WorkingDirectory (Get-Location)
     }
