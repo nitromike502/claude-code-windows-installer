@@ -145,7 +145,7 @@ if "%DEBUG_MODE%"=="true" (
     pause > nul
     PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" -Debug
 ) else (
-    PowerShell -NoProfile -ExecutionPolicy Bypass -File "!INSTALL_DIR!\src\installer.ps1"
+    PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1"
 )
 
 :cleanup
