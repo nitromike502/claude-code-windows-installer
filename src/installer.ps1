@@ -3,16 +3,30 @@
 #
 # Usage:
 #   installer.ps1                    # Interactive installation with user prompts
+#   installer.ps1 -Debug             # Enable debug output for troubleshooting
+
+param(
+    [switch]$Debug
+)
 
 # Load configuration from config.json
 function Get-InstallerConfig {
     $configPath = Join-Path $PSScriptRoot "config.json"
+    Write-DebugOutput "Looking for config file at: $configPath"
+    
     if (-not (Test-Path $configPath)) {
         throw "Configuration file not found: $configPath"
     }
+    Write-DebugOutput "Config file found, parsing JSON..."
 
     try {
         $configContent = Get-Content $configPath -Raw | ConvertFrom-Json
+        Write-DebugOutput "Config loaded successfully"
+        if ($Debug) {
+            Write-DebugOutput "Node.js version: $($configContent.dependencies.nodejs.version)"
+            Write-DebugOutput "Git version: $($configContent.dependencies.git.version)"
+            Write-DebugOutput "Context menu icon: $($configContent.installer.contextMenuIcon)"
+        }
         return $configContent
     }
     catch {
@@ -53,6 +67,17 @@ function Write-ColoredOutput {
         [string]$Color = "White"
     )
     Write-Host $Message -ForegroundColor $Color
+}
+
+# Function to write debug output
+function Write-DebugOutput {
+    param(
+        [string]$Message,
+        [string]$Color = "Gray"
+    )
+    if ($Debug) {
+        Write-Host "[DEBUG] $Message" -ForegroundColor $Color
+    }
 }
 
 # Function to prompt user for yes/no confirmation

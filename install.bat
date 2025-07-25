@@ -7,7 +7,13 @@
 :: Usage: 
 ::   install.bat (from cloned repo or downloaded file)
 ::   curl -L "...install.bat" -o install.bat && install.bat (single command)
+::   install.bat -debug (enable debug output)
 setlocal enabledelayedexpansion
+
+:: Check for debug argument
+set "DEBUG_MODE=false"
+if /i "%1"=="-debug" set "DEBUG_MODE=true"
+if /i "%1"=="--debug" set "DEBUG_MODE=true"
 
 echo ========================================
 echo      Claude Code Installer            
@@ -18,11 +24,19 @@ echo.
 set "LOCAL_MODE=false"
 set "SCRIPT_DIR=%~dp0"
 
+if "%DEBUG_MODE%"=="true" (
+    echo [DEBUG] Script directory: %SCRIPT_DIR%
+    echo [DEBUG] Checking for local files...
+    echo [DEBUG] Looking for: %SCRIPT_DIR%src\installer.ps1
+    echo [DEBUG] Looking for: %SCRIPT_DIR%src\config.json
+)
+
 if exist "%SCRIPT_DIR%src\installer.ps1" (
     if exist "%SCRIPT_DIR%src\config.json" (
         echo Local installation files detected - using cloned repository
         set "LOCAL_MODE=true"
         set "INSTALL_DIR=%SCRIPT_DIR%"
+        if "%DEBUG_MODE%"=="true" echo [DEBUG] Local mode enabled, install dir: %INSTALL_DIR%
     )
 )
 
@@ -31,12 +45,18 @@ if "%LOCAL_MODE%"=="false" (
     echo.
     
     :: Check if curl is available
+    if "%DEBUG_MODE%"=="true" echo [DEBUG] Checking curl availability...
     curl --version >nul 2>&1
     if !errorlevel! neq 0 (
         echo curl not found, trying PowerShell alternative...
         set "USE_POWERSHELL=true"
+        if "%DEBUG_MODE%"=="true" echo [DEBUG] curl not available, will use PowerShell Invoke-WebRequest
     ) else (
         set "USE_POWERSHELL=false"
+        if "%DEBUG_MODE%"=="true" (
+            echo [DEBUG] curl is available
+            curl --version 2>&1 | findstr /C:"curl"
+        )
     )
     
     :: Create temporary directory
@@ -92,7 +112,12 @@ echo.
 
 :: Change to installation directory and run installer
 cd /d "%INSTALL_DIR%"
-PowerShell -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_DIR%\src\installer.ps1"
+if "%DEBUG_MODE%"=="true" (
+    echo [DEBUG] Running PowerShell installer with debug mode...
+    PowerShell -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_DIR%\src\installer.ps1" -Debug
+) else (
+    PowerShell -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_DIR%\src\installer.ps1"
+)
 
 :cleanup
 if "%LOCAL_MODE%"=="false" (
@@ -113,12 +138,35 @@ exit /b 0
 set "url=%~1"
 set "dest=%~2"
 
+if "%DEBUG_MODE%"=="true" (
+    echo [DEBUG] Downloading: %url%
+    echo [DEBUG] Destination: %dest%
+    echo [DEBUG] Method: %USE_POWERSHELL%
+)
+
 if "%USE_POWERSHELL%"=="true" (
     :: Use PowerShell Invoke-WebRequest
-    powershell -Command "try { Invoke-WebRequest -Uri '%url%' -OutFile '%dest%' -UseBasicParsing } catch { exit 1 }"
-    exit /b !errorlevel!
+    if "%DEBUG_MODE%"=="true" echo [DEBUG] Using PowerShell Invoke-WebRequest...
+    powershell -Command "try { Write-Host '[DEBUG] Starting PowerShell download...' -ForegroundColor Gray; Invoke-WebRequest -Uri '%url%' -OutFile '%dest%' -UseBasicParsing -Verbose; Write-Host '[DEBUG] PowerShell download completed' -ForegroundColor Gray } catch { Write-Host '[DEBUG] PowerShell download failed:' $_.Exception.Message -ForegroundColor Red; exit 1 }"
+    set "download_result=!errorlevel!"
+    if "%DEBUG_MODE%"=="true" echo [DEBUG] PowerShell download exit code: !download_result!
+    exit /b !download_result!
 ) else (
     :: Use curl
-    curl -L -s -o "%dest%" "%url%"
-    exit /b !errorlevel!
+    if "%DEBUG_MODE%"=="true" echo [DEBUG] Using curl...
+    if "%DEBUG_MODE%"=="true" (
+        curl -L -v -o "%dest%" "%url%" 2>&1
+        set "download_result=!errorlevel!"
+        echo [DEBUG] curl exit code: !download_result!
+        if exist "%dest%" (
+            echo [DEBUG] File created successfully, size:
+            for %%F in ("%dest%") do echo [DEBUG] %%~zF bytes
+        ) else (
+            echo [DEBUG] File was not created
+        )
+    ) else (
+        curl -L -s -o "%dest%" "%url%"
+        set "download_result=!errorlevel!"
+    )
+    exit /b !download_result!
 )
