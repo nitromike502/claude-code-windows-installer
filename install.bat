@@ -162,8 +162,10 @@ pause
 exit /b 0
 
 :DownloadFile
-:: Download file using curl or PowerShell fallback
+:: Download file using curl or PowerShell fallback with comprehensive error handling
+:: Automatically detects available download method and provides debug output
 :: Usage: call :DownloadFile "url" "destination"
+:: Returns: Exit code 0 on success, non-zero on failure
 set "url=%~1"
 set "dest=%~2"
 

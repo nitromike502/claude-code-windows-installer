@@ -87,7 +87,9 @@ function Write-ColoredOutput {
     Write-Host $Message -ForegroundColor $Color
 }
 
-# Function to write debug output
+# Function to write debug output when -Debug parameter is enabled
+# Only outputs messages when script is run with -Debug switch
+# Prefixes all messages with [DEBUG] for easy identification
 function Write-DebugOutput {
     param(
         [string]$Message,

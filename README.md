@@ -31,6 +31,13 @@ This single command will:
 - Run the complete installation process
 - Clean up temporary files when done
 
+**For troubleshooting download issues:**
+```cmd
+curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat -debug
+```
+
+Debug mode provides detailed information about downloads, file paths, and installation steps.
+
 ### 📂 Clone Repository Method (For Development/Review)
 
 If you want to review the code or contribute:
@@ -41,6 +48,8 @@ cd claude-code-windows-installer
 ```
 
 Then double-click `install.bat` or run it from command line.
+
+For debugging: `install.bat -debug`
 
 **Smart Detection**: The installer automatically detects if you're running from a cloned repo and uses local files instead of downloading them.
 
@@ -58,6 +67,8 @@ Then double-click `install.bat` or run it from command line.
 
 - ✅ **Single-command installation** - One curl command downloads and runs everything
 - ✅ **Smart local detection** - Automatically uses local files if repository is cloned
+- ✅ **Comprehensive debug mode** - Detailed troubleshooting for download and installation issues
+- ✅ **Dual-download fallback** - Automatically switches from curl to PowerShell if needed
 - ✅ **Automatic dependency management** - Installs Git and Node.js if missing
 - ✅ **Smart version detection** - Uses nvm-windows for better Node.js version management
 - ✅ **Architecture aware** - Automatically detects 32-bit vs 64-bit Windows
@@ -65,6 +76,39 @@ Then double-click `install.bat` or run it from command line.
 - ✅ **Admin privilege handling** - Automatically requests elevation when needed
 - ✅ **Interactive prompts** - User-friendly choices for all installation decisions
 - ✅ **Configuration-driven** - Easy to update versions without code changes
+
+## Troubleshooting
+
+### Debug Mode
+
+If you encounter download failures or other installation issues, enable debug mode:
+
+```cmd
+install.bat -debug
+```
+
+Debug mode provides comprehensive troubleshooting information including:
+- **Download diagnostics**: Shows URLs, HTTP responses, and file creation status
+- **Path resolution**: Displays all file paths and directory operations
+- **Variable expansion**: Shows how batch variables are being processed
+- **PowerShell execution**: Keeps windows open to see detailed error messages
+- **Admin privilege flow**: Tracks elevation process and parameter passing
+
+### Common Issues
+
+**Download Failures:**
+- Corporate firewalls may block GitHub raw content
+- Some Windows systems lack curl (installer automatically falls back to PowerShell)
+- SSL/TLS certificate issues in corporate environments
+
+**Admin Privilege Issues:**
+- Always run from an Administrator command prompt for best results
+- Some antivirus software may interfere with admin elevation
+
+**Network Issues:**
+- Check internet connectivity
+- Configure proxy settings if behind corporate firewall
+- Try running from Git Bash if Command Prompt fails
 
 ## Usage
 

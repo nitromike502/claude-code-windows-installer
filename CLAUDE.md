@@ -66,6 +66,12 @@ This is a Windows installer for Claude Code that provides a one-click installati
 - **Benefits**: Persistent icon location independent of installer source
 - **Fallback**: Uses `shell32.dll,3` if custom icon deployment fails
 
+#### Dual-Method Download System
+- **Primary**: curl with verbose debugging and comprehensive error detection
+- **Fallback**: PowerShell Invoke-WebRequest when curl unavailable or fails
+- **Detection**: Automatic availability checking with graceful degradation
+- **Benefits**: Works across different Windows configurations and corporate environments
+
 ## Development Patterns
 
 ### Error Handling Strategy
@@ -102,6 +108,18 @@ $version = $script:Config.dependencies.nodejs.version
 - **Benefits**: Survives installer cleanup and system updates
 - **Fallback**: Graceful degradation to system defaults if deployment fails
 
+### Debug Mode Implementation
+- **Pattern**: Command-line parameter passed through entire execution chain
+- **Usage**: `install.bat -debug` enables comprehensive troubleshooting output
+- **Scope**: Debug information flows from batch → PowerShell → elevated PowerShell
+- **Benefits**: Provides detailed diagnostics for download, path, and execution issues
+
+### Variable Expansion in Batch Files
+- **Pattern**: Consistent use of delayed expansion (`!variable!`) for dynamic values
+- **Challenge**: Mixed regular (`%variable%`) and delayed expansion in same script
+- **Solution**: Set critical variables globally, use delayed expansion for all dynamic operations
+- **Example**: `REPO_BASE` set once, used with `!REPO_BASE!/path/file.ext`
+
 ## Common Issues and Solutions
 
 ### Admin Privilege Management
@@ -131,6 +149,24 @@ $version = $script:Config.dependencies.nodejs.version
 - **Fallback**: Use `shell32.dll,3` if custom icon deployment fails
 - **Registry**: Update both folder and background context menu entries with same icon path
 
+### Download Failures and Variable Expansion
+- **Issue**: Batch file variables not expanding properly, causing incomplete URLs
+- **Root Cause**: Mixing regular (`%var%`) and delayed expansion (`!var!`) inconsistently
+- **Solution**: Set global variables early, use delayed expansion throughout execution
+- **Debug Pattern**: `install.bat -debug` shows variable values and URL construction
+
+### Directory Creation and File Writing
+- **Issue**: curl fails to write files because destination directories don't exist
+- **Solution**: Create full directory structure before downloading files
+- **Pattern**: `mkdir "!TEMP_DIR!\subdir" 2>nul` with error suppression
+- **Verification**: Debug mode shows directory creation success/failure
+
+### PowerShell Admin Elevation with Parameters
+- **Issue**: Debug parameters lost when PowerShell elevates to admin privileges
+- **Solution**: Preserve command-line arguments through elevation process
+- **Pattern**: Build argument array dynamically and pass to elevated process
+- **Debug**: Use `-NoExit` in debug mode to prevent window closure for troubleshooting
+
 ## Testing Approach
 
 ### Interactive Testing
@@ -157,6 +193,13 @@ $version = $script:Config.dependencies.nodejs.version
 - Verify `claude mcp list` command execution from PowerShell
 - Test MCP installation command with various Git Bash paths
 - Validate error handling when Git Bash is not available
+
+### Debug Mode Testing
+- Test `install.bat -debug` with network failures to verify error diagnostics
+- Verify debug parameter preservation through admin elevation
+- Test variable expansion debugging with different Windows versions
+- Validate PowerShell window behavior in debug mode (stays open with `-NoExit`)
+- Test download fallback scenarios (curl → PowerShell) in debug mode
 
 ## File Structure Rationale
 
@@ -234,8 +277,15 @@ Since this is a PowerShell/batch project, there are no traditional build command
 # Test single-command installation (download mode)
 curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o test-install.bat && test-install.bat
 
+# Test single-command installation with debug mode
+curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o test-install.bat && test-install.bat -debug
+
 # Test interactive installation with existing dependencies
 .\src\installer.ps1
+
+# Test with debug mode enabled
+.\install.bat -debug
+.\src\installer.ps1 -Debug
 
 # Comprehensive testing scenarios:
 # - Test with/without existing Git installation
@@ -245,4 +295,6 @@ curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-inst
 # - Test context menu: Keep/Update/Remove options
 # - Test custom icon installation and fallback behavior
 # - Test different user response patterns and defaults
+# - Test debug mode with network failures and path issues
+# - Test admin elevation parameter preservation
 ```
