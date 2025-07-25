@@ -273,7 +273,9 @@ function Install-ClaudeCode {
     }
 }
 
-# Function to copy icon to permanent location
+# Function to copy custom icon to permanent location for context menu integration
+# Copies claude-color.ico from assets/ to %APPDATA%\ClaudeCode\ for persistent storage
+# Returns: $true if successful, $false if icon file missing or copy fails
 function Install-ContextMenuIcon {
     try {
         $contextConfig = $script:Config.installer
@@ -307,7 +309,9 @@ function Install-ContextMenuIcon {
     }
 }
 
-# Function to check if Atlassian MCP server is installed
+# Function to check if Atlassian MCP server is already configured in Claude Code
+# Executes 'claude mcp list' via Git Bash and searches for 'atlassian' in output
+# Returns: $true if Atlassian MCP server found, $false otherwise
 function Test-AtlassianMCP {
     try {
         # Find Git Bash path
@@ -330,7 +334,9 @@ function Test-AtlassianMCP {
     }
 }
 
-# Function to install Atlassian MCP server
+# Function to install Atlassian MCP server for Claude Code
+# Executes 'claude mcp add --transport sse atlassian -s user https://mcp.atlassian.com/v1/sse' via Git Bash
+# Returns: $true if installation successful, $false if failed
 function Install-AtlassianMCP {
     Write-ColoredOutput "Installing Atlassian MCP server..." "Cyan"
 

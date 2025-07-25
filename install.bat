@@ -1,4 +1,12 @@
 @echo off
+:: Claude Code Windows Installer - Smart Batch Launcher
+:: Automatically detects local vs remote installation mode
+:: - Local mode: Uses files from cloned repository
+:: - Remote mode: Downloads latest files from GitHub
+:: 
+:: Usage: 
+::   install.bat (from cloned repo or downloaded file)
+::   curl -L "...install.bat" -o install.bat && install.bat (single command)
 setlocal enabledelayedexpansion
 
 echo ========================================
