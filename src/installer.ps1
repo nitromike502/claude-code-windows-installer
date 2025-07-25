@@ -62,16 +62,23 @@ function Get-UserConfirmation {
         [string]$DefaultChoice = "N"
     )
 
-    $prompt = if ($DefaultChoice.ToUpper() -eq "Y") {
-        "$Message [Y/n]: "
+    $defaultText = if ($DefaultChoice.ToUpper() -eq "Y") {
+        "default: Yes"
     } else {
-        "$Message [y/N]: "
+        "default: No"
+    }
+
+    $prompt = if ($DefaultChoice.ToUpper() -eq "Y") {
+        "$Message [Y/n] ($defaultText): "
+    } else {
+        "$Message [y/N] ($defaultText): "
     }
 
     do {
         $response = Read-Host $prompt
         if ([string]::IsNullOrWhiteSpace($response)) {
             $response = $DefaultChoice
+            Write-Host "Using default: $($DefaultChoice.ToUpper())" -ForegroundColor Gray
         }
         $response = $response.Trim().ToUpper()
     } while ($response -notin @("Y", "YES", "N", "NO"))
@@ -174,7 +181,7 @@ function Install-Git {
         Write-ColoredOutput "- Restart your computer and try again" "White"
         Write-ColoredOutput ""
 
-        if (Get-UserConfirmation "Would you like to continue without reinstalling Git?" "Y") {
+        if (Get-UserConfirmation "Would you like to continue without reinstalling Git?" "N") {
             Write-ColoredOutput "Continuing with existing Git installation..." "Yellow"
         } else {
             throw "Git installation required but failed."
@@ -266,12 +273,127 @@ function Install-ClaudeCode {
     }
 }
 
+# Function to copy icon to permanent location
+function Install-ContextMenuIcon {
+    try {
+        $contextConfig = $script:Config.installer
+        $iconSourceFile = $contextConfig.iconSourceFile
+
+        # Create ClaudeCode directory in AppData
+        $claudeCodeDir = "$env:APPDATA\ClaudeCode"
+        if (-not (Test-Path $claudeCodeDir)) {
+            New-Item -ItemType Directory -Path $claudeCodeDir -Force | Out-Null
+        }
+
+        # Find the icon file in assets directory
+        $assetsDir = Join-Path (Split-Path $PSScriptRoot -Parent) "assets"
+        $iconSourcePath = Join-Path $assetsDir $iconSourceFile
+
+        if (-not (Test-Path $iconSourcePath)) {
+            Write-ColoredOutput "Warning: Icon file not found at $iconSourcePath, using default icon" "Yellow"
+            return $false
+        }
+
+        # Copy icon to permanent location
+        $iconDestPath = Join-Path $claudeCodeDir $iconSourceFile
+        Copy-Item -Path $iconSourcePath -Destination $iconDestPath -Force
+
+        Write-ColoredOutput "Icon installed to: $iconDestPath" "Gray"
+        return $true
+    }
+    catch {
+        Write-ColoredOutput "Warning: Could not install custom icon: $($_.Exception.Message)" "Yellow"
+        return $false
+    }
+}
+
+# Function to check if Atlassian MCP server is installed
+function Test-AtlassianMCP {
+    try {
+        # Find Git Bash path
+        $bashPath = if (Test-Path "C:\Program Files\Git\bin\bash.exe") {
+            "C:\Program Files\Git\bin\bash.exe"
+        } elseif (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe") {
+            "C:\Program Files (x86)\Git\bin\bash.exe"
+        } else {
+            return $false
+        }
+
+        # Execute claude mcp list and capture output directly
+        $mcpListOutput = & $bashPath "-c" "claude mcp list" 2>&1
+
+        # Check if atlassian is in the output
+        return ($mcpListOutput -match "atlassian")
+    }
+    catch {
+        return $false
+    }
+}
+
+# Function to install Atlassian MCP server
+function Install-AtlassianMCP {
+    Write-ColoredOutput "Installing Atlassian MCP server..." "Cyan"
+
+    try {
+        # Find Git Bash path
+        $bashPath = if (Test-Path "C:\Program Files\Git\bin\bash.exe") {
+            "C:\Program Files\Git\bin\bash.exe"
+        } elseif (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe") {
+            "C:\Program Files (x86)\Git\bin\bash.exe"
+        } else {
+            throw "Git Bash not found"
+        }
+
+        # Execute the MCP add command directly using PowerShell's & operator
+        $mcpCommand = "claude mcp add --transport sse atlassian -s user https://mcp.atlassian.com/v1/sse"
+
+        Write-ColoredOutput "Running: $mcpCommand" "Gray"
+
+        # Use PowerShell's & operator with proper argument handling
+        try {
+            $output = & $bashPath "-c" $mcpCommand 2>&1
+            $exitCode = $LASTEXITCODE
+
+            if ($exitCode -eq 0) {
+                Write-ColoredOutput "Command executed successfully" "Gray"
+                $installResult = @{ ExitCode = 0 }
+            } else {
+                Write-ColoredOutput "Command output: $output" "Red"
+                $installResult = @{ ExitCode = $exitCode }
+            }
+        }
+        catch {
+            Write-ColoredOutput "Exception during execution: $($_.Exception.Message)" "Red"
+            $installResult = @{ ExitCode = 1 }
+        }
+
+        if ($installResult.ExitCode -eq 0) {
+            Write-ColoredOutput "Atlassian MCP server installed successfully!" "Green"
+            return $true
+        } else {
+            throw "MCP installation failed with exit code $($installResult.ExitCode)"
+        }
+    }
+    catch {
+        Write-ColoredOutput "Failed to install Atlassian MCP server: $($_.Exception.Message)" "Red"
+        return $false
+    }
+}
+
 # Function to add Windows Explorer context menu
 function Add-ContextMenu {
     Write-ColoredOutput "Adding convenient right-click option to Windows Explorer..." "Cyan"
 
     try {
         $contextConfig = $script:Config.installer
+
+        # Install custom icon if available
+        $iconInstalled = Install-ContextMenuIcon
+        $iconPath = if ($iconInstalled) {
+            $contextConfig.contextMenuIcon
+        } else {
+            "shell32.dll,3"  # Fallback to default folder icon
+        }
 
         # Registry paths for folder context menu
         $folderPath = "HKCU:\Software\Classes\Directory\shell\ClaudeCode"
@@ -305,7 +427,7 @@ function Add-ContextMenu {
 
         # Set values for folder context menu
         Set-ItemProperty -Path $folderPath -Name "(Default)" -Value $contextConfig.contextMenuText
-        Set-ItemProperty -Path $folderPath -Name "Icon" -Value $contextConfig.contextMenuIcon
+        Set-ItemProperty -Path $folderPath -Name "Icon" -Value $iconPath
         Set-ItemProperty -Path $folderCommandPath -Name "(Default)" -Value $commandValue
 
         # Create registry keys for folder background context menu
@@ -314,7 +436,7 @@ function Add-ContextMenu {
 
         # Set values for folder background context menu
         Set-ItemProperty -Path $backgroundPath -Name "(Default)" -Value $contextConfig.contextMenuText
-        Set-ItemProperty -Path $backgroundPath -Name "Icon" -Value $contextConfig.contextMenuIcon
+        Set-ItemProperty -Path $backgroundPath -Name "Icon" -Value $iconPath
         Set-ItemProperty -Path $backgroundCommandPath -Name "(Default)" -Value $commandValue
 
         Write-ColoredOutput "Context menu added successfully!" "Green"
@@ -404,7 +526,7 @@ try {
         if ($nvmExists) {
             $nodeVersion = $script:Config.dependencies.nodejs.version
             Write-ColoredOutput "nvm is installed but needs Node.js v$nodeVersion." "Yellow"
-            if (Get-UserConfirmation "Install Node.js v$nodeVersion via nvm?" "Y") {
+            if (Get-UserConfirmation "Install Node.js v$nodeVersion via nvm?" "N") {
                 # Just install Node.js via existing nvm
                 try {
                     $nvmExe = Get-Command nvm -ErrorAction SilentlyContinue
@@ -422,7 +544,7 @@ try {
         } else {
             $minVersion = $script:Config.dependencies.nodejs.minimumVersion
             Write-ColoredOutput "Node.js version $nodeVersion found, but v$minVersion or newer is required." "Yellow"
-            if (Get-UserConfirmation "Would you like to reinstall Node.js with nvm-windows?" "Y") {
+            if (Get-UserConfirmation "Would you like to reinstall Node.js with nvm-windows?" "N") {
                 Install-NodeJS
             }
         }
@@ -505,6 +627,29 @@ try {
         }
     }
 
+    # Handle Atlassian MCP server installation
+    Write-ColoredOutput ""
+
+    $mcpInstalled = $false
+    $atlassianMCPExists = Test-AtlassianMCP
+
+    if ($atlassianMCPExists) {
+        Write-ColoredOutput "Atlassian MCP server is already configured." "Green"
+        Write-ColoredOutput "This enables Claude Code to access Jira tickets and Confluence pages." "Gray"
+        $mcpInstalled = $true
+    } else {
+        Write-ColoredOutput "The installer can add the Atlassian MCP server to Claude Code." "Cyan"
+        Write-ColoredOutput "This enables access to Jira tickets and Confluence pages directly from Claude Code." "Gray"
+
+        if (Get-UserConfirmation "Would you like to add the Atlassian MCP server?" "Y") {
+            $mcpInstalled = Install-AtlassianMCP
+        } else {
+            Write-ColoredOutput "Skipping Atlassian MCP server installation." "Yellow"
+            Write-ColoredOutput "You can install it later by running this command in Git Bash:" "Gray"
+            Write-ColoredOutput "claude mcp add --transport sse atlassian -s user https://mcp.atlassian.com/v1/sse" "Cyan"
+        }
+    }
+
     # Success message
     Write-ColoredOutput ""
     Write-ColoredOutput "========================================" "Green"
@@ -516,15 +661,20 @@ try {
     Write-ColoredOutput "How to use:" "White"
     if ($contextMenuAdded) {
         Write-ColoredOutput "- Right-click on any project folder and select 'Open with Claude Code'" "White"
-        Write-ColoredOutput "- Or open PowerShell/Command Prompt/Git Bash and type 'claude'" "White"
+        Write-ColoredOutput "- Or open Git Bash and type 'claude'" "White"
     } else {
-        Write-ColoredOutput "- Open PowerShell/Command Prompt/Git Bash, navigate to your project folder, and type 'claude'" "White"
+        Write-ColoredOutput "- Open Git Bash, navigate to your project folder, and type 'claude'" "White"
         Write-ColoredOutput "- Or run 'claude' from any directory to start in the current location" "White"
     }
     Write-ColoredOutput ""
     Write-ColoredOutput "Important:" "Yellow"
-    Write-ColoredOutput "The first time you run a command, your browser will open to ask you to log in." "Yellow"
-    Write-ColoredOutput "This is normal and only happens once." "Yellow"
+    Write-ColoredOutput "The first time you open Claude Code, you'll be asked to select a color theme and authenticate." "Yellow"
+    Write-ColoredOutput "Select #2 'Billing Account'. Your browser will open to login, use your Orases Google account to authenticate." "Yellow"
+    if ($mcpInstalled) {
+        Write-ColoredOutput ""
+        Write-ColoredOutput "You'll also be asked to authenticate with Atlassian to enable Jira and Confluence access." "Yellow"
+        Write-ColoredOutput "After opening claude, type `/mcp` and hit Enter" "Yellow"
+    }
     Write-ColoredOutput ""
     Write-ColoredOutput "Press any key to exit..." "White"
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

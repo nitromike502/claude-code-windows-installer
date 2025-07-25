@@ -17,8 +17,9 @@
   
   "installer": {
     "contextMenuText": "Open with Claude Code",
-    "contextMenuIcon": "shell32.dll,3",
-    "_comment": "Windows Explorer context menu configuration. Icon format: dll,index"
+    "contextMenuIcon": "%APPDATA%\\ClaudeCode\\claude-color.ico",
+    "iconSourceFile": "claude-color.ico",
+    "_comment": "Windows Explorer context menu configuration. Icon will be copied to AppData during installation"
   },
   
   "urls": {
