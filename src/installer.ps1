@@ -1,17 +1,8 @@
 # Claude Code Windows Installer
 # This script installs Claude Code and its dependencies on Windows systems
-# 
+#
 # Usage:
-#   installer.ps1                    # Normal installation
-#   installer.ps1 -Force             # Force reinstall of all dependencies
-#   installer.ps1 -ForceGit          # Force reinstall Git only
-#   installer.ps1 -ForceNode         # Force reinstall Node.js/nvm only
-
-param(
-    [switch]$Force,
-    [switch]$ForceGit,
-    [switch]$ForceNode
-)
+#   installer.ps1                    # Interactive installation with user prompts
 
 # Load configuration from config.json
 function Get-InstallerConfig {
@@ -19,7 +10,7 @@ function Get-InstallerConfig {
     if (-not (Test-Path $configPath)) {
         throw "Configuration file not found: $configPath"
     }
-    
+
     try {
         $configContent = Get-Content $configPath -Raw | ConvertFrom-Json
         return $configContent
@@ -28,9 +19,6 @@ function Get-InstallerConfig {
         throw "Failed to parse configuration file: $($_.Exception.Message)"
     }
 }
-
-# Global configuration variable
-$script:Config = Get-InstallerConfig
 
 # Function to check if running as administrator
 function Test-Administrator {
@@ -41,11 +29,20 @@ function Test-Administrator {
 
 # Function to restart script with admin privileges
 function Request-AdminPrivileges {
+    param([string]$ScriptPath)
+
     Write-Host "Admin permissions are needed to install system tools. Please click 'Yes' on the prompt." -ForegroundColor Yellow
     Start-Sleep -Seconds 2
-    
-    $scriptPath = $MyInvocation.MyCommand.Path
-    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$scriptPath`""
+
+    try {
+        $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"")
+        Start-Process powershell -Verb RunAs -ArgumentList $arguments
+    }
+    catch {
+        Write-Host "Failed to elevate privileges: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Please run PowerShell as Administrator manually and execute the script." -ForegroundColor Yellow
+        pause
+    }
     exit
 }
 
@@ -58,29 +55,53 @@ function Write-ColoredOutput {
     Write-Host $Message -ForegroundColor $Color
 }
 
+# Function to prompt user for yes/no confirmation
+function Get-UserConfirmation {
+    param(
+        [string]$Message,
+        [string]$DefaultChoice = "N"
+    )
+
+    $prompt = if ($DefaultChoice.ToUpper() -eq "Y") {
+        "$Message [Y/n]: "
+    } else {
+        "$Message [y/N]: "
+    }
+
+    do {
+        $response = Read-Host $prompt
+        if ([string]::IsNullOrWhiteSpace($response)) {
+            $response = $DefaultChoice
+        }
+        $response = $response.Trim().ToUpper()
+    } while ($response -notin @("Y", "YES", "N", "NO"))
+
+    return $response -in @("Y", "YES")
+}
+
 # Function to check Node.js version against minimum requirement
 function Test-NodeVersion {
     param([string]$Version)
-    
+
     try {
         $versionNumber = $Version -replace 'v', ''
         $versionParts = $versionNumber.Split('.')
         $major = [int]$versionParts[0]
         $minor = [int]$versionParts[1]
         $patch = [int]$versionParts[2]
-        
+
         # Get minimum version from config
         $minVersion = $script:Config.dependencies.nodejs.minimumVersion
         $minParts = $minVersion.Split('.')
         $minMajor = [int]$minParts[0]
         $minMinor = [int]$minParts[1]
         $minPatch = [int]$minParts[2]
-        
+
         # Check if version meets minimum requirement
         if ($major -gt $minMajor) { return $true }
         if ($major -eq $minMajor -and $minor -gt $minMinor) { return $true }
         if ($major -eq $minMajor -and $minor -eq $minMinor -and $patch -ge $minPatch) { return $true }
-        
+
         return $false
     }
     catch {
@@ -91,93 +112,127 @@ function Test-NodeVersion {
 # Function to download and install Git
 function Install-Git {
     Write-ColoredOutput "A required tool, Git, is missing. We will now install it for you." "Yellow"
-    
+
     try {
+        # Check for running Git processes
+        $gitProcesses = Get-Process | Where-Object { $_.ProcessName -like "*git*" -or $_.ProcessName -like "*bash*" }
+        if ($gitProcesses.Count -gt 0) {
+            Write-ColoredOutput "Warning: Git or Git Bash processes are currently running." "Yellow"
+            Write-ColoredOutput "This may interfere with the Git installation." "Yellow"
+            Write-ColoredOutput ""
+            Write-ColoredOutput "Running processes:" "Gray"
+            $gitProcesses | ForEach-Object { Write-ColoredOutput "  - $($_.ProcessName)" "Gray" }
+            Write-ColoredOutput ""
+
+            if (-not (Get-UserConfirmation "Continue with Git installation anyway?" "N")) {
+                Write-ColoredOutput "Git installation skipped. Please close Git processes and run the installer again." "Yellow"
+                return
+            }
+        }
+
         # Detect system architecture
         $architecture = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
         Write-ColoredOutput "Detected $architecture Windows system" "Gray"
-        
+
         # Build URL from config template
         $gitConfig = $script:Config.dependencies.git
         $gitUrl = $script:Config.urls.gitBase -replace '{version}', $gitConfig.version -replace '{arch}', $architecture
         $gitInstaller = "$env:TEMP\git-installer.exe"
-        
+
         Write-ColoredOutput "Downloading Git v$($gitConfig.version) for $architecture..." "Cyan"
         Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
-        
+
         Write-ColoredOutput "Installing Git..." "Cyan"
-        Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART" -Wait
-        
+        Write-ColoredOutput "Note: If installation fails, close all Git Bash windows and try again." "Gray"
+
+        $installProcess = Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART" -Wait -PassThru
+
+        if ($installProcess.ExitCode -ne 0) {
+            throw "Git installer failed with exit code $($installProcess.ExitCode). This often happens when Git processes are running."
+        }
+
         # Add Git to PATH for current session
         $gitPath = if ($architecture -eq "64-bit") {
             "C:\Program Files\Git\bin"
         } else {
             "C:\Program Files (x86)\Git\bin"
         }
-        
+
         if (Test-Path $gitPath) {
             $env:Path += ";$gitPath"
         }
-        
+
         Remove-Item $gitInstaller -Force
         Write-ColoredOutput "Git v$($gitConfig.version) installed successfully!" "Green"
     }
     catch {
-        throw "Failed to install Git: $($_.Exception.Message)"
+        Write-ColoredOutput "Git installation failed: $($_.Exception.Message)" "Red"
+        Write-ColoredOutput ""
+        Write-ColoredOutput "Common solutions:" "Yellow"
+        Write-ColoredOutput "- Close all Git Bash windows and terminals" "White"
+        Write-ColoredOutput "- Close any applications using Git (VS Code, etc.)" "White"
+        Write-ColoredOutput "- Restart your computer and try again" "White"
+        Write-ColoredOutput ""
+
+        if (Get-UserConfirmation "Would you like to continue without reinstalling Git?" "Y") {
+            Write-ColoredOutput "Continuing with existing Git installation..." "Yellow"
+        } else {
+            throw "Git installation required but failed."
+        }
     }
 }
 
 # Function to download and install Node.js via nvm-windows
 function Install-NodeJS {
     Write-ColoredOutput "A required tool, Node.js, is missing or outdated. We will install it using nvm for better version management." "Yellow"
-    
+
     try {
         # First, install nvm-windows
         Write-ColoredOutput "Installing nvm-windows (Node Version Manager)..." "Cyan"
-        
+
         $nvmUrl = $script:Config.urls.nvmWindows
         $nvmInstaller = "$env:TEMP\nvm-setup.exe"
-        
+
         Write-ColoredOutput "Downloading nvm-windows..." "Cyan"
         Invoke-WebRequest -Uri $nvmUrl -OutFile $nvmInstaller -UseBasicParsing
-        
+
         Write-ColoredOutput "Installing nvm-windows..." "Cyan"
         Start-Process -FilePath $nvmInstaller -ArgumentList "/S" -Wait
-        
+
         # Add nvm to PATH for current session
         $nvmPath = "$env:APPDATA\nvm"
         if (Test-Path $nvmPath) {
             $env:Path += ";$nvmPath"
         }
-        
+
         # Refresh environment variables
         $env:NVM_HOME = "$env:APPDATA\nvm"
         $env:NVM_SYMLINK = "$env:ProgramFiles\nodejs"
-        
+
         Remove-Item $nvmInstaller -Force
-        
+
         # Wait a moment for installation to complete
         Start-Sleep -Seconds 3
-        
+
         # Now install Node.js using version from config
         $nodeConfig = $script:Config.dependencies.nodejs
         $nodeVersion = $nodeConfig.version
         Write-ColoredOutput "Installing Node.js v$nodeVersion using nvm..." "Cyan"
-        
+
         # Use cmd to run nvm commands (nvm-windows is a batch script)
         $nvmExe = "$env:APPDATA\nvm\nvm.exe"
         if (-not (Test-Path $nvmExe)) {
             # Fallback path
             $nvmExe = "C:\ProgramData\nvm\nvm.exe"
         }
-        
+
         if (Test-Path $nvmExe) {
             # Install Node.js from config
             Start-Process -FilePath $nvmExe -ArgumentList "install", $nodeVersion -Wait -NoNewWindow
-            
+
             # Set as default version
             Start-Process -FilePath $nvmExe -ArgumentList "use", $nodeVersion -Wait -NoNewWindow
-            
+
             # Add Node.js to PATH for current session
             $nodeSymlink = "$env:ProgramFiles\nodejs"
             if (Test-Path $nodeSymlink) {
@@ -186,7 +241,7 @@ function Install-NodeJS {
         } else {
             throw "nvm installation failed - executable not found"
         }
-        
+
         Write-ColoredOutput "Node.js v$nodeVersion installed successfully via nvm!" "Green"
         Write-ColoredOutput "You can now use 'nvm list' and 'nvm use <version>' to manage Node.js versions." "Gray"
     }
@@ -198,7 +253,7 @@ function Install-NodeJS {
 # Function to install Claude Code
 function Install-ClaudeCode {
     Write-ColoredOutput "Installing Claude Code..." "Cyan"
-    
+
     try {
         $result = npm install -g @anthropic-ai/claude-code 2>&1
         if ($LASTEXITCODE -ne 0) {
@@ -214,36 +269,54 @@ function Install-ClaudeCode {
 # Function to add Windows Explorer context menu
 function Add-ContextMenu {
     Write-ColoredOutput "Adding convenient right-click option to Windows Explorer..." "Cyan"
-    
+
     try {
         $contextConfig = $script:Config.installer
-        
+
         # Registry paths for folder context menu
         $folderPath = "HKCU:\Software\Classes\Directory\shell\ClaudeCode"
         $folderCommandPath = "$folderPath\command"
-        
+
         # Registry paths for folder background context menu
         $backgroundPath = "HKCU:\Software\Classes\Directory\Background\shell\ClaudeCode"
         $backgroundCommandPath = "$backgroundPath\command"
-        
+
         # Create registry keys for folder context menu
         New-Item -Path $folderPath -Force | Out-Null
         New-Item -Path $folderCommandPath -Force | Out-Null
-        
+
+        # Determine Git Bash path
+        $gitBashPath = if (Test-Path "C:\Program Files\Git\bin\bash.exe") {
+            "C:\Program Files\Git\bin\bash.exe"
+        } elseif (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe") {
+            "C:\Program Files (x86)\Git\bin\bash.exe"
+        } else {
+            # Fallback to PowerShell if Git Bash not found
+            "powershell.exe"
+        }
+
+        if ($gitBashPath -like "*bash.exe") {
+            # Use Git Bash - let it handle the directory change natively
+            $commandValue = "`"$gitBashPath`" --cd=`"%V`" -c `"claude`""
+        } else {
+            # Fallback to PowerShell
+            $commandValue = 'powershell.exe -NoExit -Command "Set-Location -Path ''%V''; claude"'
+        }
+
         # Set values for folder context menu
         Set-ItemProperty -Path $folderPath -Name "(Default)" -Value $contextConfig.contextMenuText
         Set-ItemProperty -Path $folderPath -Name "Icon" -Value $contextConfig.contextMenuIcon
-        Set-ItemProperty -Path $folderCommandPath -Name "(Default)" -Value 'powershell.exe -NoExit -Command "Set-Location -Path ''%V''; claude-code"'
-        
+        Set-ItemProperty -Path $folderCommandPath -Name "(Default)" -Value $commandValue
+
         # Create registry keys for folder background context menu
         New-Item -Path $backgroundPath -Force | Out-Null
         New-Item -Path $backgroundCommandPath -Force | Out-Null
-        
+
         # Set values for folder background context menu
         Set-ItemProperty -Path $backgroundPath -Name "(Default)" -Value $contextConfig.contextMenuText
         Set-ItemProperty -Path $backgroundPath -Name "Icon" -Value $contextConfig.contextMenuIcon
-        Set-ItemProperty -Path $backgroundCommandPath -Name "(Default)" -Value 'powershell.exe -NoExit -Command "Set-Location -Path ''%V''; claude-code"'
-        
+        Set-ItemProperty -Path $backgroundCommandPath -Name "(Default)" -Value $commandValue
+
         Write-ColoredOutput "Context menu added successfully!" "Green"
     }
     catch {
@@ -255,38 +328,40 @@ function Add-ContextMenu {
 try {
     # Check if running as administrator
     if (-not (Test-Administrator)) {
-        Request-AdminPrivileges
+        Request-AdminPrivileges -ScriptPath $MyInvocation.MyCommand.Path
         return
     }
-    
+
+    # Load configuration after admin check
+    try {
+        $script:Config = Get-InstallerConfig
+    }
+    catch {
+        Write-Host "Configuration Error: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Please ensure config.json exists in the src directory and is valid JSON." -ForegroundColor Yellow
+        Write-Host "Press any key to exit..." -ForegroundColor Gray
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        exit 1
+    }
+
     # Setup environment
     $Host.UI.RawUI.WindowTitle = "Claude Code Installer"
     Clear-Host
-    
+
     Write-ColoredOutput "========================================" "Magenta"
     Write-ColoredOutput "    Welcome to Claude Code Installer   " "Magenta"
     Write-ColoredOutput "========================================" "Magenta"
-    
-    # Display force flags if active
-    if ($Force -or $ForceGit -or $ForceNode) {
-        Write-ColoredOutput ""
-        $forceFlags = @()
-        if ($Force) { $forceFlags += "Force (all dependencies)" }
-        if ($ForceGit) { $forceFlags += "ForceGit" }
-        if ($ForceNode) { $forceFlags += "ForceNode" }
-        Write-ColoredOutput "Active flags: $($forceFlags -join ', ')" "Yellow"
-    }
-    
+
     Write-ColoredOutput ""
-    
+
     # Check dependencies
     Write-ColoredOutput "Checking system requirements..." "Cyan"
-    
+
     $gitExists = Get-Command git -ErrorAction SilentlyContinue
     $nodeExists = Get-Command node -ErrorAction SilentlyContinue
     $nvmExists = Get-Command nvm -ErrorAction SilentlyContinue
     $nodeVersionOk = $false
-    
+
     if ($nodeExists) {
         $nodeVersion = node -v
         $nodeVersionOk = Test-NodeVersion $nodeVersion
@@ -307,53 +382,129 @@ try {
             # nvm exists but no suitable Node.js version
         }
     }
-    
-    # Install missing dependencies (with force flags)
-    if (-not $gitExists -or $Force -or $ForceGit) {
-        if ($gitExists -and ($Force -or $ForceGit)) {
-            Write-ColoredOutput "Force flag detected - reinstalling Git..." "Yellow"
-        }
+
+    # Install dependencies with user prompts
+    Write-ColoredOutput ""
+
+    # Handle Git installation
+    if (-not $gitExists) {
         Install-Git
     } else {
         Write-ColoredOutput "Git is already installed." "Green"
-    }
-    
-    if (-not $nodeExists -or -not $nodeVersionOk -or $Force -or $ForceNode) {
-        if (($nodeExists -or $nvmExists) -and ($Force -or $ForceNode)) {
-            Write-ColoredOutput "Force flag detected - reinstalling Node.js/nvm..." "Yellow"
+        if (Get-UserConfirmation "Would you like to reinstall Git anyway?" "N") {
+            Install-Git
         }
-        
-        if ($nvmExists -and -not $nodeVersionOk -and -not $Force -and -not $ForceNode) {
+    }
+
+    # Handle Node.js/nvm installation
+    Write-ColoredOutput ""
+    if (-not $nodeExists -and -not $nvmExists) {
+        Install-NodeJS
+    } elseif (-not $nodeVersionOk) {
+        if ($nvmExists) {
             $nodeVersion = $script:Config.dependencies.nodejs.version
-            Write-ColoredOutput "nvm is installed but needs Node.js v$nodeVersion. Installing via nvm..." "Yellow"
-            # Just install Node.js via existing nvm
-            try {
-                $nvmExe = Get-Command nvm -ErrorAction SilentlyContinue
-                if ($nvmExe) {
-                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "nvm", "install", $nodeVersion -Wait -NoNewWindow
-                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "nvm", "use", $nodeVersion -Wait -NoNewWindow
-                    Write-ColoredOutput "Node.js v$nodeVersion installed via existing nvm!" "Green"
-                } else {
+            Write-ColoredOutput "nvm is installed but needs Node.js v$nodeVersion." "Yellow"
+            if (Get-UserConfirmation "Install Node.js v$nodeVersion via nvm?" "Y") {
+                # Just install Node.js via existing nvm
+                try {
+                    $nvmExe = Get-Command nvm -ErrorAction SilentlyContinue
+                    if ($nvmExe) {
+                        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "nvm", "install", $nodeVersion -Wait -NoNewWindow
+                        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "nvm", "use", $nodeVersion -Wait -NoNewWindow
+                        Write-ColoredOutput "Node.js v$nodeVersion installed via existing nvm!" "Green"
+                    } else {
+                        Install-NodeJS
+                    }
+                } catch {
                     Install-NodeJS
                 }
-            } catch {
-                Install-NodeJS
             }
         } else {
-            Install-NodeJS
+            $minVersion = $script:Config.dependencies.nodejs.minimumVersion
+            Write-ColoredOutput "Node.js version $nodeVersion found, but v$minVersion or newer is required." "Yellow"
+            if (Get-UserConfirmation "Would you like to reinstall Node.js with nvm-windows?" "Y") {
+                Install-NodeJS
+            }
         }
     } else {
         Write-ColoredOutput "Node.js is already installed and up to date." "Green"
+        if (Get-UserConfirmation "Would you like to reinstall Node.js/nvm anyway?" "N") {
+            Install-NodeJS
+        }
     }
-    
+
     # Install Claude Code
     Write-ColoredOutput ""
-    Install-ClaudeCode
-    
-    # Add context menu integration
+
+    # Check if Claude Code is already installed
+    $claudeExists = Get-Command claude -ErrorAction SilentlyContinue
+    if (-not $claudeExists) {
+        Install-ClaudeCode
+    } else {
+        Write-ColoredOutput "Claude Code is already installed." "Green"
+        if (Get-UserConfirmation "Would you like to reinstall Claude Code anyway?" "N") {
+            Install-ClaudeCode
+        }
+    }
+
+    # Handle context menu integration
     Write-ColoredOutput ""
-    Add-ContextMenu
-    
+
+    # Check if context menu already exists
+    $contextMenuExists = (Test-Path "HKCU:\Software\Classes\Directory\shell\ClaudeCode") -or
+                        (Test-Path "HKCU:\Software\Classes\Directory\Background\shell\ClaudeCode")
+
+    $contextMenuAdded = $false
+
+    if ($contextMenuExists) {
+        Write-ColoredOutput "Windows Explorer context menu for Claude Code is already installed." "Green"
+        Write-ColoredOutput "This adds 'Open with Claude Code' to folder right-click menus." "Gray"
+
+        $userChoice = ""
+        do {
+            Write-Host "What would you like to do? " -NoNewline
+            Write-Host "[K]eep, [U]pdate, or [R]emove? [K/u/r]: " -NoNewline -ForegroundColor Cyan
+            $userChoice = Read-Host
+            if ([string]::IsNullOrWhiteSpace($userChoice)) {
+                $userChoice = "K"
+            }
+            $userChoice = $userChoice.Trim().ToUpper()
+        } while ($userChoice -notin @("K", "KEEP", "U", "UPDATE", "R", "REMOVE"))
+
+        switch ($userChoice) {
+            {$_ -in @("K", "KEEP")} {
+                Write-ColoredOutput "Keeping existing context menu." "Green"
+                $contextMenuAdded = $true
+            }
+            {$_ -in @("U", "UPDATE")} {
+                Write-ColoredOutput "Updating context menu with latest settings..." "Yellow"
+                Add-ContextMenu
+                $contextMenuAdded = $true
+            }
+            {$_ -in @("R", "REMOVE")} {
+                Write-ColoredOutput "Removing context menu..." "Yellow"
+                try {
+                    Remove-Item "HKCU:\Software\Classes\Directory\shell\ClaudeCode" -Recurse -Force -ErrorAction SilentlyContinue
+                    Remove-Item "HKCU:\Software\Classes\Directory\Background\shell\ClaudeCode" -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-ColoredOutput "Context menu removed successfully." "Green"
+                }
+                catch {
+                    Write-ColoredOutput "Warning: Could not fully remove context menu entries." "Yellow"
+                }
+                $contextMenuAdded = $false
+            }
+        }
+    } else {
+        Write-ColoredOutput "The installer can add 'Open with Claude Code' to your Windows Explorer right-click menu." "Cyan"
+        Write-ColoredOutput "This allows you to right-click any folder and launch Claude Code directly." "Gray"
+        if (Get-UserConfirmation "Would you like to add the context menu option?" "Y") {
+            Add-ContextMenu
+            $contextMenuAdded = $true
+        } else {
+            Write-ColoredOutput "Skipping context menu integration." "Yellow"
+        }
+    }
+
     # Success message
     Write-ColoredOutput ""
     Write-ColoredOutput "========================================" "Green"
@@ -363,8 +514,13 @@ try {
     Write-ColoredOutput "Claude Code has been successfully installed!" "Green"
     Write-ColoredOutput ""
     Write-ColoredOutput "How to use:" "White"
-    Write-ColoredOutput "• Right-click on any project folder and select 'Open with Claude Code'" "White"
-    Write-ColoredOutput "• Or open PowerShell/Command Prompt and type 'claude-code'" "White"
+    if ($contextMenuAdded) {
+        Write-ColoredOutput "- Right-click on any project folder and select 'Open with Claude Code'" "White"
+        Write-ColoredOutput "- Or open PowerShell/Command Prompt/Git Bash and type 'claude'" "White"
+    } else {
+        Write-ColoredOutput "- Open PowerShell/Command Prompt/Git Bash, navigate to your project folder, and type 'claude'" "White"
+        Write-ColoredOutput "- Or run 'claude' from any directory to start in the current location" "White"
+    }
     Write-ColoredOutput ""
     Write-ColoredOutput "Important:" "Yellow"
     Write-ColoredOutput "The first time you run a command, your browser will open to ask you to log in." "Yellow"

@@ -11,22 +11,23 @@ This installer automatically sets up everything you need to run Claude Code on W
 - **Sets up version management** - Installs nvm-windows for better Node.js handling
 - **Adds Windows integration** - Creates right-click context menu for folders
 - **Handles permissions** - Automatically requests admin privileges when needed
-- **Provides testing options** - Force reinstall flags for development and troubleshooting
+- **Interactive prompts** - User-friendly prompts for all installation decisions
 
-After installation, you can right-click any folder and select "Open with Claude Code" or run `claude-code` from any command prompt.
+After installation, you can right-click any folder and select "Open with Claude Code" or run `claude` from any command prompt.
 
 ## Quick Install
 
 **Automated Installation:**
 1. Download the installer files to your Windows machine
-2. Double-click `✅ START HERE - Install Claude Code.bat`
+2. Double-click `START HERE - Install Claude Code.bat`
 3. Click "Yes" when prompted for admin privileges
-4. Wait for installation to complete
+4. Answer the interactive prompts for your preferences
+5. Wait for installation to complete
 
 **Manual Installation (recommended for review):**
 1. Download the installer files
 2. Review the PowerShell script at `src/installer.ps1`
-3. Run the installer: `✅ START HERE - Install Claude Code.bat`
+3. Run the installer: `START HERE - Install Claude Code.bat`
 
 ## Features
 
@@ -36,7 +37,7 @@ After installation, you can right-click any folder and select "Open with Claude 
 - ✅ **Architecture aware** - Automatically detects 32-bit vs 64-bit Windows
 - ✅ **Windows Explorer integration** - Adds right-click context menu for folders
 - ✅ **Admin privilege handling** - Automatically requests elevation when needed
-- ✅ **Force reinstall options** - Can force reinstall dependencies for testing
+- ✅ **Interactive prompts** - User-friendly choices for all installation decisions
 - ✅ **Configuration-driven** - Easy to update versions without code changes
 
 ## Usage
@@ -45,45 +46,36 @@ After installation completes:
 
 1. **Verify installation**: Open a new command prompt and run:
    ```cmd
-   claude-code --version
+   claude --version
    ```
 
 2. **Start using Claude Code**: 
-   - **Via context menu**: Right-click any project folder → "Open with Claude Code"
-   - **Via command line**: Navigate to your project and run `claude-code`
+   - **Via context menu**: Right-click any project folder → "Open with Claude Code" (opens Git Bash)
+   - **Via command line**: Navigate to your project and run `claude`
 
 3. **First-time setup**: The first time you run Claude Code, your browser will open asking you to log in. This is normal and only happens once.
 
-## Command Line Options
+## Interactive Installation
 
-The installer supports several command-line options for different installation scenarios:
+The installer uses interactive prompts instead of command-line flags, making it user-friendly:
 
-### Basic Installation
+### Installation Flow
 ```batch
-# Standard installation - detects existing dependencies
-"✅ START HERE - Install Claude Code.bat"
+# Run the installer
+"START HERE - Install Claude Code.bat"
 ```
 
-### Force Reinstall Options
-```batch
-# Force reinstall everything (useful for testing or troubleshooting)
-"✅ START HERE - Install Claude Code.bat" -Force
-
-# Force reinstall Git only (if Git is corrupted)
-"✅ START HERE - Install Claude Code.bat" -ForceGit
-
-# Force reinstall Node.js/nvm only (for Node.js issues)
-"✅ START HERE - Install Claude Code.bat" -ForceNode
-```
+The installer will prompt you for decisions:
+- **Git already installed?** → Ask to reinstall or keep existing
+- **Node.js/nvm present?** → Ask to reinstall, update, or keep existing  
+- **Claude Code exists?** → Ask to reinstall or keep existing
+- **Context menu setup?** → Ask to add, update, keep, or remove context menu
 
 ### PowerShell Direct Usage
 ```powershell
 # Navigate to src folder and run directly
 cd src
-.\installer.ps1                    # Normal installation
-.\installer.ps1 -Force             # Force reinstall all dependencies
-.\installer.ps1 -ForceGit          # Force reinstall Git only
-.\installer.ps1 -ForceNode         # Force reinstall Node.js/nvm only
+.\installer.ps1                    # Interactive installation with prompts
 ```
 
 ## Installation Process
@@ -102,8 +94,8 @@ The installer performs these steps automatically:
 3. **Installs Claude Code**
    - Runs `npm install -g @anthropic-ai/claude-code`
    
-4. **Sets up Windows integration**
-   - Adds "Open with Claude Code" to folder context menus
+4. **Sets up Windows integration** (optional)
+   - Adds "Open with Claude Code" to folder context menus (opens Git Bash)
 
 ## Architecture
 
@@ -114,7 +106,7 @@ This installer follows a modular, configuration-driven architecture:
 - **Batch Launcher**: User-friendly entry point with parameter support
 - **PowerShell Installer**: Main logic with admin privilege management
 - **JSON Configuration**: Centralized version and URL management
-- **Force Flag System**: Selective reinstallation for testing and troubleshooting
+- **Interactive Prompt System**: User-friendly prompts for all installation decisions
 
 ### Design Philosophy
 
@@ -166,7 +158,7 @@ To update versions, simply edit the JSON file - no code changes required.
 ### Installation Fails
 - Check internet connection
 - Ensure you clicked "Yes" for admin privileges
-- Try running with `-Force` flag to reinstall dependencies
+- Run the installer again and choose to reinstall failed components when prompted
 
 ### Context Menu Not Appearing
 - Installation requires admin privileges to modify registry
@@ -181,7 +173,7 @@ To update versions, simply edit the JSON file - no code changes required.
 
 ```
 claude-code-windows-installer/
-├── ✅ START HERE - Install Claude Code.bat  # Main launcher
+├── START HERE - Install Claude Code.bat  # Main launcher
 ├── src/
 │   ├── installer.ps1                        # PowerShell installer script
 │   └── config.json                          # Configuration file

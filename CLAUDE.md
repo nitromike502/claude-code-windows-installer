@@ -10,10 +10,10 @@ This is a Windows installer for Claude Code that provides a one-click installati
 
 ### Core Components
 
-1. **Batch Launcher** (`✅ START HERE - Install Claude Code.bat`)
+1. **Batch Launcher** (`START HERE - Install Claude Code.bat`)
    - Entry point for users
-   - Handles parameter passing to PowerShell script
-   - Provides cross-platform compatibility
+   - Simple launcher without parameter complexity
+   - Provides Windows-native experience
 
 2. **PowerShell Installer** (`src/installer.ps1`)
    - Main installation logic
@@ -61,10 +61,10 @@ $script:Config = Get-InstallerConfig
 $version = $script:Config.dependencies.nodejs.version
 ```
 
-### Force Flag Implementation
-- **Pattern**: Boolean switches for selective reinstallation
-- **Usage**: `-Force`, `-ForceGit`, `-ForceNode` parameters
-- **Logic**: OR conditions in installation checks
+### Interactive Prompt Implementation
+- **Pattern**: User-friendly confirmation prompts for all decisions
+- **Usage**: `Get-UserConfirmation` function with default choices
+- **Logic**: Conditional flows based on user responses
 
 ## Common Issues and Solutions
 
@@ -85,9 +85,10 @@ $version = $script:Config.dependencies.nodejs.version
 
 ## Testing Approach
 
-### Force Flags for Testing
-- Use `-Force` flags to test installation paths even with existing dependencies
-- Separate flags (`-ForceGit`, `-ForceNode`) for component-specific testing
+### Interactive Testing
+- Run installer with existing dependencies to test prompts
+- Test "reinstall anyway" choices for each component
+- Verify context menu Keep/Update/Remove functionality
 
 ### Configuration Testing
 - Modify `config.json` to test different versions
@@ -97,7 +98,7 @@ $version = $script:Config.dependencies.nodejs.version
 ## File Structure Rationale
 
 ```
-├── ✅ START HERE - Install Claude Code.bat  # User-friendly entry point
+├── START HERE - Install Claude Code.bat  # User-friendly entry point
 ├── src/                                     # Source code isolation  
 │   ├── installer.ps1                        # Main logic
 │   └── config.json                          # Configuration data
@@ -122,7 +123,7 @@ $version = $script:Config.dependencies.nodejs.version
 
 ### Version Updates
 1. Edit `src/config.json` version numbers
-2. Test with `-Force` flags to verify downloads work
+2. Test by running installer and choosing to reinstall components
 3. No code changes required for routine updates
 
 ### URL Updates
@@ -140,13 +141,12 @@ $version = $script:Config.dependencies.nodejs.version
 Since this is a PowerShell/batch project, there are no traditional build commands. Testing is done by:
 
 ```powershell
-# Test normal installation
+# Test interactive installation
 .\installer.ps1
 
-# Test force reinstall
-.\installer.ps1 -Force
-
-# Test specific components
-.\installer.ps1 -ForceGit
-.\installer.ps1 -ForceNode
+# Test with existing dependencies (to trigger prompts)
+# Run installer multiple times and choose different options:
+# - Keep existing vs reinstall dependencies
+# - Add/Update/Remove context menu options
+# - Test different user response patterns
 ```
